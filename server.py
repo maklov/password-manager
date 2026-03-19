@@ -1,14 +1,14 @@
 import os
 
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-
-from database import User, Entry, get_db
-from sqlalchemy.orm import Session
-from password import EncryptedPasswordPayload
-from login import LoginResponse, LoginRequest, RegisterRequest
 import jwt
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+
+from database import Entry, User, get_db
+from login import LoginRequest, LoginResponse, RegisterRequest
+from password import EncryptedPasswordPayload
 
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -18,7 +18,10 @@ server = FastAPI(title="Zero-Knowledge Password Manager API")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+
+async def get_current_user(
+        token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401,
         detail="Couldn't verify token",
@@ -39,6 +42,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
+
 @server.post("/api/login")
 async def login(login_payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == login_payload.email).first()
@@ -47,18 +51,19 @@ async def login(login_payload: LoginRequest, db: Session = Depends(get_db)):
     token = jwt.encode({"sub": str(user.id)}, SECRET_KEY, algorithm=ALGORITHM)
     return LoginResponse(access_token=token)
 
+
 @server.post("/api/register")
 async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == payload.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists"
+            detail="User with this email already exists",
         )
     new_user = User(
         email=payload.email,
         server_auth_hash=payload.server_auth_hash,
-        salt=payload.salt
+        salt=payload.salt,
     )
     db.add(new_user)
     db.commit()
@@ -66,29 +71,35 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
     return {"status": "success", "message": "Account created successfully!"}
 
+
 @server.get("/api/{email}/salt")
 async def get_user_salt(email: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No salt for given user"
+            status_code=status.HTTP_404_NOT_FOUND, detail="No salt for given user"
         )
 
     return {"email": user.email, "salt": user.salt}
 
+
 @server.get("/api/entries")
-async def get_all_entries(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_all_entries(
+        current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     entries = db.query(Entry).filter(Entry.user_id == current_user.id).all()
     return entries
 
+
 @server.post("/api/entries")
-async def add_entry(item: EncryptedPasswordPayload, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def add_entry(
+        item: EncryptedPasswordPayload,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+):
     try:
         new_entry = Entry(
-            user_id=current_user.id,
-            ciphertext=item.ciphertext,
-            iv=item.iv
+            user_id=current_user.id, ciphertext=item.ciphertext, iv=item.iv
         )
         db.add(new_entry)
         db.commit()
@@ -96,10 +107,48 @@ async def add_entry(item: EncryptedPasswordPayload, current_user: User = Depends
     except Exception:
         raise HTTPException(status_code=500, detail="Couldn't add new entry")
 
+
 @server.put("/api/entries/{entry_id}/{item}")
-async def edit_entry():
-    pass
+async def edit_entry(
+        entry_id: int,
+        item: EncryptedPasswordPayload,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+):
+    entry = (
+        db.query(Entry)
+        .filter(Entry.user_id == current_user.id, Entry.id == entry_id)
+        .first()
+    )
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+
+    entry.ciphertext = item.ciphertext
+    entry.iv = item.iv
+
+    db.commit()
+
+    return {"status": "success", "message": "Entity updated!"}
+
 
 @server.delete("/api/entries/{entry_id}")
-async def delete_entry():
-    pass
+async def delete_entry(
+        entry_id: int,
+        item: EncryptedPasswordPayload,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+):
+    entry = (
+        db.query(Entry)
+        .filter(Entry.user_id == current_user.id, Entry.id == entry_id)
+        .first()
+    )
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found.")
+
+    db.delete(entry)
+    db.commit()
+
+    return {"status": "success", "message": "Entity successfully deleted!"}

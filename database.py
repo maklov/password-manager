@@ -1,9 +1,9 @@
+import os
 from enum import unique
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
-from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-import os
+from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 load_dotenv()
 db_link = os.getenv("DB_LINK")
@@ -12,6 +12,7 @@ engine = create_engine(db_link)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
 
 class User(Base):
     __tablename__ = "users"
@@ -22,6 +23,7 @@ class User(Base):
 
     entries = relationship("Entry", back_populates="owner")
 
+
 class Entry(Base):
     __tablename__ = "entries"
     id = Column(Integer, primary_key=True, index=True)
@@ -30,6 +32,7 @@ class Entry(Base):
     iv = Column(String, nullable=False)
 
     owner = relationship("User", back_populates="entries")
+
 
 Base.metadata.create_all(bind=engine)
 
