@@ -16,7 +16,7 @@ ALGORITHM = os.getenv("ALGORITHM")
 
 server = FastAPI(title="Zero-Knowledge Password Manager API")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 async def get_current_user(
@@ -29,7 +29,7 @@ async def get_current_user(
     )
     try:
         # getting users id from token
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
         user_id_str: str = payload.get("sub")
         if user_id_str is None:
             raise credentials_exception
@@ -104,11 +104,13 @@ async def add_entry(
         db.add(new_entry)
         db.commit()
         db.refresh(new_entry)
+
+        return {"status": "success", "id": new_entry.id}
     except Exception:
         raise HTTPException(status_code=500, detail="Couldn't add new entry")
 
 
-@server.put("/api/entries/{entry_id}/{item}")
+@server.put("/api/entries/{entry_id}/")
 async def edit_entry(
         entry_id: int,
         item: EncryptedPasswordPayload,
@@ -135,7 +137,6 @@ async def edit_entry(
 @server.delete("/api/entries/{entry_id}")
 async def delete_entry(
         entry_id: int,
-        item: EncryptedPasswordPayload,
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db),
 ):
