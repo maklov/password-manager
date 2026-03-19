@@ -1,21 +1,105 @@
-from fastapi import FastAPI
-from data_model import EncryptedPasswordPayload
+import os
 
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 
-server = FastAPI()
+from database import User, Entry, get_db
+from sqlalchemy.orm import Session
+from password import EncryptedPasswordPayload
+from login import LoginResponse, LoginRequest, RegisterRequest
+import jwt
+from dotenv import load_dotenv
 
-@server.get("/{token}/entries")
-async def get_all_entries():
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+
+server = FastAPI(title="Zero-Knowledge Password Manager API")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401,
+        detail="Couldn't verify token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # getting users id from token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+
+    # checking if user id is in DB
+    user = db.query(User).filter(User.id == int(user_id_str)).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+@server.post("/api/login")
+async def login(login_payload: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == login_payload.email).first()
+    if not user or user.server_auth_hash != login_payload.server_auth_hash:
+        raise HTTPException(status_code=401, detail="Incorrect email address or hash")
+    token = jwt.encode({"sub": str(user.id)}, SECRET_KEY, algorithm=ALGORITHM)
+    return LoginResponse(access_token=token)
+
+@server.post("/api/register")
+async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == payload.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email already exists"
+        )
+    new_user = User(
+        email=payload.email,
+        server_auth_hash=payload.server_auth_hash,
+        salt=payload.salt
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {"status": "success", "message": "Account created successfully!"}
+
+@server.get("/api/{email}/salt")
+async def get_user_salt(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No salt for given user"
+        )
+
+    return {"email": user.email, "salt": user.salt}
+
+@server.get("/api/entries")
+async def get_all_entries(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    entries = db.query(Entry).filter(Entry.user_id == current_user.id).all()
+    return entries
+
+@server.post("/api/entries")
+async def add_entry(item: EncryptedPasswordPayload, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        new_entry = Entry(
+            user_id=current_user.id,
+            ciphertext=item.ciphertext,
+            iv=item.iv
+        )
+        db.add(new_entry)
+        db.commit()
+        db.refresh(new_entry)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Couldn't add new entry")
+
+@server.put("/api/entries/{entry_id}/{item}")
+async def edit_entry():
     pass
 
-@server.get("/{token}/entries/{item}")
-async def get_entry():
+@server.delete("/api/entries/{entry_id}")
+async def delete_entry():
     pass
-
-@server.post("/{token}/entries")
-async def add_entry():
-    pass
-
-@server.put("/{token}/entries/{entry_id}/{item}")
-async def edit_entry(item: EncryptedPasswordPayload):
-    return {"message": "Saved successfully", "received_item":item.iv}
