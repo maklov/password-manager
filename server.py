@@ -20,7 +20,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 async def get_current_user(
-        token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401,
@@ -85,7 +85,7 @@ async def get_user_salt(email: str, db: Session = Depends(get_db)):
 
 @server.get("/api/entries")
 async def get_all_entries(
-        current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     entries = db.query(Entry).filter(Entry.user_id == current_user.id).all()
     return entries
@@ -93,9 +93,9 @@ async def get_all_entries(
 
 @server.post("/api/entries")
 async def add_entry(
-        item: EncryptedPasswordPayload,
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db),
+    item: EncryptedPasswordPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     try:
         new_entry = Entry(
@@ -112,10 +112,10 @@ async def add_entry(
 
 @server.put("/api/entries/{entry_id}/")
 async def edit_entry(
-        entry_id: int,
-        item: EncryptedPasswordPayload,
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db),
+    entry_id: int,
+    item: EncryptedPasswordPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     entry = (
         db.query(Entry)
@@ -136,9 +136,9 @@ async def edit_entry(
 
 @server.delete("/api/entries/{entry_id}")
 async def delete_entry(
-        entry_id: int,
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db),
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     entry = (
         db.query(Entry)
