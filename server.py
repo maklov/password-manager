@@ -2,7 +2,8 @@ import os
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException
+from starlette import status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,7 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ):
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401,
+        status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Couldn't verify token",
         headers={"WWW-Authenticate": "Bearer"},
     )
