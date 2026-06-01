@@ -14,7 +14,7 @@ The project follows a **Separation of Concerns** principle. This repository focu
 
 ### Prerequisites
 * Docker & Docker Compose installed on your machine.
-* Python 3.12+
+* Python 3.10+
 
 ### Running the Service
 1. Clone the repository:
