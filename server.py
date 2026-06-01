@@ -1,6 +1,7 @@
 import os
 
 import jwt
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from starlette import status
@@ -49,7 +50,9 @@ async def login(login_payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == login_payload.email).first()
     if not user or user.server_auth_hash != login_payload.server_auth_hash:
         raise HTTPException(status_code=401, detail="Incorrect email address or hash")
-    token = jwt.encode({"sub": str(user.id)}, SECRET_KEY, algorithm=ALGORITHM)
+
+    expires = datetime.now(timezone.utc) + timedelta(days=30)
+    token = jwt.encode({"sub": str(user.id), "exp": expires},SECRET_KEY, algorithm=ALGORITHM)
     return LoginResponse(access_token=token)
 
 
