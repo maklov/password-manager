@@ -1,6 +1,4 @@
 import os
-from enum import unique
-
 from dotenv import load_dotenv
 from sqlalchemy import Column, ForeignKey, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
@@ -30,6 +28,8 @@ class Entry(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     ciphertext = Column(String, nullable=False)
     iv = Column(String, nullable=False)
+    notes_ciphertext = Column(String, nullable=True)   # szyfrowane notes
+    notes_iv = Column(String, nullable=True)            # nonce dla notes
 
     owner = relationship("User", back_populates="entries")
 

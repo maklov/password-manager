@@ -1,10 +1,9 @@
 import os
+from datetime import datetime, timedelta, timezone
 
 import jwt
-from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
-from starlette import status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -30,7 +29,6 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # getting users id from token
         payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
         user_id_str: str = payload.get("sub")
         if user_id_str is None:
@@ -38,7 +36,6 @@ async def get_current_user(
     except jwt.PyJWTError:
         raise credentials_exception
 
-    # checking if user id is in DB
     user = db.query(User).filter(User.id == int(user_id_str)).first()
     if user is None:
         raise credentials_exception
@@ -52,7 +49,11 @@ async def login(login_payload: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Incorrect email address or hash")
 
     expires = datetime.now(timezone.utc) + timedelta(days=30)
-    token = jwt.encode({"sub": str(user.id), "exp": expires},SECRET_KEY, algorithm=ALGORITHM)
+    token = jwt.encode(
+        {"sub": str(user.id), "exp": expires},
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
     return LoginResponse(access_token=token)
 
 
@@ -72,7 +73,6 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-
     return {"status": "success", "message": "Account created successfully!"}
 
 
@@ -83,7 +83,6 @@ async def get_user_salt(email: str, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="No salt for given user"
         )
-
     return {"email": user.email, "salt": user.salt}
 
 
@@ -103,12 +102,15 @@ async def add_entry(
 ):
     try:
         new_entry = Entry(
-            user_id=current_user.id, ciphertext=item.ciphertext, iv=item.iv
+            user_id=current_user.id,
+            ciphertext=item.ciphertext,
+            iv=item.iv,
+            notes_ciphertext=item.notes_ciphertext,
+            notes_iv=item.notes_iv,
         )
         db.add(new_entry)
         db.commit()
         db.refresh(new_entry)
-
         return {"status": "success", "id": new_entry.id}
     except Exception:
         raise HTTPException(status_code=500, detail="Couldn't add new entry")
@@ -126,15 +128,14 @@ async def edit_entry(
         .filter(Entry.user_id == current_user.id, Entry.id == entry_id)
         .first()
     )
-
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found.")
 
     entry.ciphertext = item.ciphertext
     entry.iv = item.iv
-
+    entry.notes_ciphertext = item.notes_ciphertext
+    entry.notes_iv = item.notes_iv
     db.commit()
-
     return {"status": "success", "message": "Entity updated!"}
 
 
@@ -149,11 +150,9 @@ async def delete_entry(
         .filter(Entry.user_id == current_user.id, Entry.id == entry_id)
         .first()
     )
-
     if not entry:
         raise HTTPException(status_code=404, detail="Entry not found.")
 
     db.delete(entry)
     db.commit()
-
     return {"status": "success", "message": "Entity successfully deleted!"}
